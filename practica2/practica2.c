@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include "mpi.h"
 #define MAXPROC 8    /* Número mínimo de procesos */
-#define LENGTH 3    /* Longitud datos a enviar */
+#define LENGTH 5  /* Longitud datos a enviar */
 
 main(int argc, char* argv[]) {
    int i, j, numProc, miRango, rang;
@@ -66,13 +66,13 @@ main(int argc, char* argv[]) {
         MPI_Recv(&x[0][i], 1, Column_type, 0, 0, MPI_COMM_WORLD, &status);
       }
       MPI_Send(&x, 1, Column_type, 0, 0, MPI_COMM_WORLD);
-      printf("\nEl proceso %d ha recibido el elemento: \n", miRango);
+/*      printf("\nEl proceso %d ha recibido el elemento: \n", miRango);
          for (i=0; i<LENGTH; i++) {
            for (j=0; j<LENGTH; j++) {
                 printf(" %d", x[j][i]);
            }
            printf("\n\n");
-         }
+         }*/
    }
 
    MPI_Finalize();
