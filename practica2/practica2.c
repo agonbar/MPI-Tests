@@ -31,15 +31,15 @@ main(int argc, char* argv[]) {
       }
    }
 
-   if (numProc>MAXPROC) {
+   if (numProc!=MAXPROC) {
       if (miRango == 0)  
-         printf("Tienes que usar un número par de procesos (como máximo %d)\n", MAXPROC);
+         printf("Tienes que usar %d  procesos )\n", MAXPROC);
       MPI_Finalize();
       exit(0);
    }
 
    if (miRango == 0) {
-      printf("El proceso %d está distribuyendo la matriz x a los %d procesos\n", miRango, numProc);
+      printf("El proceso %d está distribuyendo la matriz x a los %d procesos\n", miRango,numProc-1);
       
       for (i=0; i<LENGTH; i++) {
        printf("\n");
