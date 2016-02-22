@@ -61,7 +61,6 @@ void main(int argc, char* argv[]) {
 	contIter = 0;
 	do {
 		contIter++;
-		newTemp = (1 - Coeff) * myTemp;
 		temporal = 0;
 
 		// TODO: envío de información a los vecinos
@@ -73,7 +72,7 @@ void main(int argc, char* argv[]) {
 				temporal = temporal+recvTemp;
 			}
 	        }
-		newTemp = newTemp + Coeff * (temporal / numVec);
+		newTemp = (1 - Coeff) * myTemp + Coeff * (temporal / numVec);
 		// Actualización temperaturas
 		if (myRank != 0) {
 			myTemp = newTemp;
