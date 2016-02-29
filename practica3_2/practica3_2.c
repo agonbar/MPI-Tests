@@ -35,7 +35,6 @@ main(int argc, char* argv[])
    }
 
    MPI_Win_fence(0,exp_win);
-   if (mi_rango!=0)
 	numVec = 0;
       	MPI_Get(&miDato, 1, MPI_FLOAT, 0, mi_rango, 1, MPI_FLOAT, exp_win);
 	MPI_Get(&miDatoA, 1, MPI_FLOAT, 0, mi_rango+1, 1, MPI_FLOAT, exp_win);
@@ -52,8 +51,8 @@ main(int argc, char* argv[])
 	if(miDatoD != 0.000000) numVec = numVec + 1;
 	temporal = miDatoA + miDatoB + miDatoC + miDatoD;
 	miDato = (1 - Coeff) * miDato + Coeff * (temporal / numVec);
-	MPI_Put(&miDato, LENGTH*LENGTH*sizeof(float), MPI_FLOAT, mi_rango, 1, 1, MPI_FLOAT, exp_win); //HALP con este no se como hacer
-
+	MPI_Send(&miDato, 1,MPI_FLOAT, data[mi_rango], 0,MPI_COMM_WORLD);
+	
    MPI_Win_fence(0,exp_win);
 
    if (mi_rango!=0) {
