@@ -1,66 +1,150 @@
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 #include "mpi.h"
-#define MAXPROC 8    /* Número mínimo de procesos */
-#define LENGTH 3  /* Longitud datos a enviar */
+#define NFil 4
+#define NCol 4
+#define ColdTemp 20.0
+#define HotTemp 80.0
+#define NumIter 100
 #define Coeff 0.5
 
-main(int argc, char* argv[])
-{
-   int mi_rango, num_procs;
-   int i, j, numVec;
-   float data[LENGTH*LENGTH];
-   MPI_Win exp_win;
+int getNumVec(MPI_Comm);
+void getVec(int*, MPI_Comm);
 
-   float miDato, miDatoA, miDatoB, miDatoC, miDatoD, temporal;
+MPI_Comm commCart;
 
-   MPI_Init(&argc, &argv);
-   MPI_Comm_rank(MPI_COMM_WORLD, &mi_rango);
-   MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
+void main(int argc, char* argv[]) {
+	int myRank;
+	int numProcs;
+	int nDims=2,
+		dims[2]={NFil,NCol},
+		periods[2]={0,0};
+	int numVec,vec[NFil];
+	int contIter;
+	int i;
+	MPI_Status status;
+	MPI_Comm comCartesiano;
 
-   if (mi_rango==0) {
-      printf("Vamos a calcular: ");
-      data[0] = 80.0;
-      for (i=1;i<LENGTH*LENGTH;i++) {
-            data[i] = 20.0;
-        }
-   
-      printf("\n");
-   }
-
-   if (mi_rango==0) {
-      MPI_Win_create(&data[0], LENGTH*LENGTH*sizeof(float),sizeof(float),MPI_INFO_NULL,MPI_COMM_WORLD,&exp_win);
-   }
-   else {
-      MPI_Win_create(MPI_BOTTOM,0,1,MPI_INFO_NULL,MPI_COMM_WORLD,&exp_win);
-   }
-
-   MPI_Win_fence(0,exp_win);
-	numVec = 0;
-      	MPI_Get(&miDato, 1, MPI_FLOAT, 0, mi_rango, 1, MPI_FLOAT, exp_win);
-	MPI_Get(&miDatoA, 1, MPI_FLOAT, 0, mi_rango+1, 1, MPI_FLOAT, exp_win);
-	if(miDatoA != 0.000000) numVec = numVec + 1;
-	if(mi_rango-1 >= 0){
-		MPI_Get(&miDatoB, 1, MPI_FLOAT, 0, mi_rango-1, 1, MPI_FLOAT, exp_win);
-		if(miDatoB != 0.000000) numVec = numVec + 1;
-	}
-	if(mi_rango-LENGTH >= 0){
-		MPI_Get(&miDatoC, 1, MPI_FLOAT, 0, mi_rango-LENGTH, 1, MPI_FLOAT, exp_win);
-		if(miDatoC != 0.000000) numVec = numVec + 1;
-	}
-	MPI_Get(&miDatoD, 1, MPI_FLOAT, 0, mi_rango+LENGTH, 1, MPI_FLOAT, exp_win);
-	if(miDatoD != 0.000000) numVec = numVec + 1;
-	temporal = miDatoA + miDatoB + miDatoC + miDatoD;
-	miDato = (1 - Coeff) * miDato + Coeff * (temporal / numVec);
-	MPI_Send(&miDato, 1,MPI_FLOAT, data[mi_rango], 0,MPI_COMM_WORLD);
+	float myTemp, recvTemp, newTemp, temporal, res[NFil*NCol];
 	
-   MPI_Win_fence(0,exp_win);
+	MPI_Init(&argc, &argv);
+	MPI_Comm_size(MPI_COMM_WORLD,&numProcs);
+	MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
+	MPI_Win res_ventana;
 
-   if (mi_rango!=0) {
-   	  printf("Hola, soy el proceso %d y leí el datosuperior %f, inferior %f, izq %f, der %f \n",mi_rango,miDatoA,miDatoB,miDatoC,miDatoD);
-   }
+	// TODO: comprobación de número de procesos correcto
+	if (numProcs!=NFil*NCol) {
+		if (myRank == 0)  printf("Tienes que usar %d  procesos \n", NFil*NCol);
+	MPI_Finalize();
+	exit(0);
+	}
 
-   MPI_Win_free(&exp_win);
-   MPI_Finalize();
+	// TODO: creación del comunicador cartesiano
+	MPI_Cart_create(MPI_COMM_WORLD, nDims, dims, periods, 0, &comCartesiano);
+
+	numVec = getNumVec(comCartesiano);
+	getVec(vec, comCartesiano);
+
+	// Información de la topología cartesiana
+	printf("Soy el nodo %d y tengo %d vecinos: ",myRank,numVec);
+	for  (i =0 ; i<NFil; i++)
+		if (vec[i]>=0)
+			printf("%d ",vec[i]);
+	printf("\n");
+
+	// Valores iniciales de temperatura
+	if (myRank==0){
+		myTemp = HotTemp;
+		MPI_Win_create(&res[0], numProcs*sizeof(float), 1, MPI_INFO_NULL, MPI_COMM_WORLD, &res_ventana);
+	} else {
+		MPI_Win_create(MPI_BOTTOM, 0, 1, MPI_INFO_NULL, MPI_COMM_WORLD, &res_ventana);
+		myTemp = ColdTemp;
+	}
+
+	contIter = 0;
+
+	do {
+		contIter++;
+		temporal = 0;
+
+		// TODO: envío de información a los vecinos
+		for (i=0; i<NFil; i++) {
+        		if (vec[i]>=0) {
+				MPI_Send(&myTemp, 1, MPI_FLOAT, vec[i], 0, comCartesiano);
+				// TODO: recepción de información de los vecinos y cálculo de la nueva temperatura en newTemp
+				MPI_Recv(&recvTemp, 1, MPI_FLOAT, vec[i], 0, comCartesiano, &status); 
+				temporal = temporal+recvTemp;
+			}
+	        }
+		newTemp = (1 - Coeff) * myTemp + Coeff * (temporal / numVec);
+		// Actualización temperaturas
+		if (myRank != 0) {
+			myTemp = newTemp;
+			MPI_Win_fence(0, res_ventana);
+			MPI_Put(&myTemp, 1, MPI_INT, 0, myRank*sizeof(float), 1, MPI_INT, res_ventana);
+			MPI_Win_fence(0, res_ventana);
+		} else {
+			MPI_Win_fence(0, res_ventana);
+			printf("\nResultado iteracion %d:\n", contIter);
+			MPI_Win_fence(0, res_ventana);
+			printf("  %f",HotTemp);
+			for (i=1; i<numProcs; i++){
+				if(i%NFil == 0) { printf("\n"); }
+				printf("  %f",res[i]);
+			}
+			printf("\n");
+		}
+
+
+		// Muestra información 
+		//if (myRank == numProcs-1)
+		//	if (contIter%10 == 0)
+		//		printf("Iter %d - soy el nodo %d y mi temp. es %f\n",contIter, myRank,myTemp);
+	} while (contIter < NumIter);
+
+	
+	MPI_Win_free(&res_ventana);
+	MPI_Finalize();
+	exit(0);
 }
 
+int getNumVec(MPI_Comm comCartesiano) {
+
+	// TODO: obtención del número de vecinos de un nodo
+	int nV, src, dest;
+	//Comprobamos superior e inferior
+	nV = 0;
+	MPI_Cart_shift(comCartesiano,0,1,&src,&dest);
+	if(src >= 0) {
+		nV = nV + 1;
+	}
+	if(dest >= 0) {
+		nV = nV +1;
+	}
+	//printf("Encima: %d, Debajo: %d \n", src, dest);
+	
+	//Comprobamos los de izq y derecha
+	MPI_Cart_shift(comCartesiano,1,1,&src,&dest);
+	if(src >= 0) {
+                nV = nV + 1;
+        }
+        if(dest >= 0) {
+                nV = nV +1;
+        }
+	//printf("Izquierda: %d, Derecha: %d \n", src, dest);
+
+	return nV;
+}
+
+void getVec(int *vec, MPI_Comm comCartesiano) {
+	int src, dest;
+	// TODO: obtención de la lista de vecinos de un  nodo
+	MPI_Cart_shift(comCartesiano,0,1,&src,&dest);
+	vec[0] = src;
+	vec[1] = dest;
+	MPI_Cart_shift(comCartesiano,1,1,&src,&dest);
+	vec[2] = src;
+	vec[3] = dest;
+}
 
